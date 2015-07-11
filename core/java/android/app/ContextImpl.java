@@ -118,6 +118,7 @@ import android.os.ServiceManager;
 import android.os.UserHandle;
 import android.os.SystemVibrator;
 import android.os.UserManager;
+import android.os.FirewallConfigManager;
 import android.os.storage.IMountService;
 import android.os.storage.StorageManager;
 import android.print.IPrintManager;
@@ -587,6 +588,12 @@ class ContextImpl extends Context {
                 public Object createService(ContextImpl ctx) {
                     return new SystemVibrator(ctx);
                 }});
+
+        registerService(FIREWALLCONFIG_SERVICE, new ServiceFetcher() {
+            public Object createService(ContextImpl ctx) {
+                return FirewallConfigManager.getFirewallConfigManager();
+            }
+        });
 
         registerService(WALLPAPER_SERVICE, WALLPAPER_FETCHER);
 

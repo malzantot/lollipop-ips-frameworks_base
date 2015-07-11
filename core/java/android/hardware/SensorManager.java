@@ -807,6 +807,14 @@ public abstract class SensorManager {
     protected abstract boolean registerListenerImpl(SensorEventListener listener, Sensor sensor,
             int delayUs, Handler handler, int maxBatchReportLatencyUs, int reservedFlags);
 
+    
+    public void reloadConfig() {
+        Log.d(TAG, "SensorManager::reloadConfig");
+        reloadConfigImpl();
+    }
+
+    /** @hide */
+    protected abstract void reloadConfigImpl();
 
     /**
      * Flushes the batch FIFO of all the sensors registered for this listener. If there are events

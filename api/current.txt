@@ -7214,6 +7214,7 @@ package android.content {
     field public static final java.lang.String DISPLAY_SERVICE = "display";
     field public static final java.lang.String DOWNLOAD_SERVICE = "download";
     field public static final java.lang.String DROPBOX_SERVICE = "dropbox";
+    field public static final java.lang.String FIREWALLCONFIG_SERVICE = "firewallconfigservice";
     field public static final java.lang.String INPUT_METHOD_SERVICE = "input_method";
     field public static final java.lang.String INPUT_SERVICE = "input";
     field public static final java.lang.String JOB_SCHEDULER_SERVICE = "jobscheduler";
@@ -12423,6 +12424,7 @@ package android.hardware {
     method public boolean registerListener(android.hardware.SensorEventListener, android.hardware.Sensor, int, int);
     method public boolean registerListener(android.hardware.SensorEventListener, android.hardware.Sensor, int, android.os.Handler);
     method public boolean registerListener(android.hardware.SensorEventListener, android.hardware.Sensor, int, int, android.os.Handler);
+    method public void reloadConfig();
     method public static boolean remapCoordinateSystem(float[], int, int, float[]);
     method public boolean requestTriggerSensor(android.hardware.TriggerEventListener, android.hardware.Sensor);
     method public deprecated void unregisterListener(android.hardware.SensorListener);
@@ -21698,6 +21700,27 @@ package android.os {
     field public static final int OPEN = 32; // 0x20
   }
 
+  public class FirewallConfigManager {
+    method public static synchronized android.os.FirewallConfigManager getFirewallConfigManager();
+    method public android.os.IFirewallConfigService getFirewallConfigService();
+    method public void setFirewallConfig(java.lang.String);
+    field public static final int TYPE_ACCELEROMETER = 1; // 0x1
+    field public static final int TYPE_ALL = -1; // 0xffffffff
+    field public static final int TYPE_AMBIENT_TEMPERATURE = 13; // 0xd
+    field public static final int TYPE_GPS = 30; // 0x1e
+    field public static final int TYPE_GRAVITY = 9; // 0x9
+    field public static final int TYPE_GYROSCOPE = 4; // 0x4
+    field public static final int TYPE_LIGHT = 5; // 0x5
+    field public static final int TYPE_LINEAR_ACCELERATION = 10; // 0xa
+    field public static final int TYPE_MAGNETIC_FIELD = 2; // 0x2
+    field public static final int TYPE_ORIENTATION = 3; // 0x3
+    field public static final int TYPE_PRESSURE = 6; // 0x6
+    field public static final int TYPE_PROXIMITY = 8; // 0x8
+    field public static final int TYPE_RELATIVE_HUMIDITY = 12; // 0xc
+    field public static final int TYPE_ROTATION_VECTOR = 11; // 0xb
+    field public static final int TYPE_TEMPERATURE = 7; // 0x7
+  }
+
   public class Handler {
     ctor public Handler();
     ctor public Handler(android.os.Handler.Callback);
@@ -21770,6 +21793,17 @@ package android.os {
 
   public static abstract interface IBinder.DeathRecipient {
     method public abstract void binderDied();
+  }
+
+  public abstract interface IFirewallConfigService implements android.os.IInterface {
+    method public abstract void setFirewallConfig(java.lang.String) throws android.os.RemoteException;
+  }
+
+  public static abstract class IFirewallConfigService.Stub extends android.os.Binder implements android.os.IFirewallConfigService {
+    ctor public IFirewallConfigService.Stub();
+    method public android.os.IBinder asBinder();
+    method public static android.os.IFirewallConfigService asInterface(android.os.IBinder);
+    method public boolean onTransact(int, android.os.Parcel, android.os.Parcel, int) throws android.os.RemoteException;
   }
 
   public abstract interface IInterface {

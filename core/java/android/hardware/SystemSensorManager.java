@@ -37,6 +37,12 @@ import java.util.List;
  * @hide
  */
 public class SystemSensorManager extends SensorManager {
+    protected void reloadConfigImpl() {
+        Log.d(TAG, "SystemSensorManager::reloadConfigImpl");
+        sensors_reload_config();
+    }
+    
+    static native void sensors_reload_config();
     private static native void nativeClassInit();
     private static native int nativeGetNextSensor(Sensor sensor, int next);
 

@@ -122,6 +122,12 @@ nativeGetNextSensor(JNIEnv *env, jclass clazz, jobject sensor, jint next)
     return size_t(next) < count ? next : 0;
 }
 
+
+static void sensors_reload_config(JNIEnv *env, jclass clazz) {
+    ALOGD("JNI-bridge: sensor_reload_config");
+    SensorManager& mgr(SensorManager::getInstance());
+    mgr.reloadConfig();
+}
 //----------------------------------------------------------------------------
 
 class Receiver : public LooperCallback {
@@ -288,6 +294,8 @@ static JNINativeMethod gBaseEventQueueMethods[] = {
     {"nativeFlushSensor",
             "(J)I",
             (void*)nativeFlushSensor },
+    {"sensors_reload_config",
+            "()V", (void*)sensors_reload_config},
 };
 
 }; // namespace android

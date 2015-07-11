@@ -8,6 +8,9 @@ LOCAL_MODULE := services
 
 LOCAL_SRC_FILES := $(call all-java-files-under,java)
 
+LOCAL_SRC_FILES += \
+        java/com/android/server/FirewallConfigMessages.proto
+
 # EventLogTags files.
 LOCAL_SRC_FILES += \
         core/java/com/android/server/EventLogTags.logtags

@@ -891,6 +891,14 @@ public final class SystemServer {
                 }
             }
 
+            try {
+                Slog.i(TAG, "Sensor Firewall Config Service");
+                ServiceManager.addService("firewallconfigservice",
+                    new FirewallConfigService(context));
+            } catch (Throwable e) {
+                reportWtf("starting FirewallConfigService service", e);
+            }
+
             if (!disableNonCoreServices) {
                 // Dreams (interactive idle-time views, a/k/a screen savers, and doze mode)
                 mSystemServiceManager.startService(DreamManagerService.class);
