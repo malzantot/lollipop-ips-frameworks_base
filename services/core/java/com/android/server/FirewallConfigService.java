@@ -125,8 +125,7 @@ public class FirewallConfigService extends IFirewallConfigService.Stub {
             if(binder != null) {
                 mLocationService = ILocationManager.Stub.asInterface(binder);
                 Log.d(TAG, "Calling LocationService reloadConfig");
-        	    // TODO: Moustafa uncomment
-                //mLocationService.reloadConfig();
+                mLocationService.reloadConfig();
                 throw new RemoteException();
             }
             else {

@@ -39,6 +39,13 @@ import com.android.server.location.LocationRequestStatistics.PackageStatistics;
 import com.android.server.location.MockProvider;
 import com.android.server.location.PassiveProvider;
 
+import android_sensorfirewall.FirewallConfigMessages.*;
+import com.google.protobuf.InvalidProtocolBufferException;
+import java.io.File;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import android.os.FirewallConfigManager;
+
 import android.app.AppOpsManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -104,7 +111,7 @@ import java.util.Set;
  */
 public class LocationManagerService extends ILocationManager.Stub {
     private static final String TAG = "LocationManagerService";
-    public static final boolean D = Log.isLoggable(TAG, Log.DEBUG);
+    public static final boolean D = true; // Log.isLoggable(TAG, Log.DEBUG);
 
     private static final String WAKELOCK_KEY = TAG;
 
@@ -160,6 +167,7 @@ public class LocationManagerService extends ILocationManager.Stub {
     private LocationWorkerHandler mLocationHandler;
     private PassiveProvider mPassiveProvider;  // track passive provider for special cases
     private LocationBlacklist mBlacklist;
+    private FirewallConfigManager mFirewallConfigManager;
     private GpsMeasurementsProvider mGpsMeasurementsProvider;
     private GpsNavigationMessageProvider mGpsNavigationMessageProvider;
 
@@ -211,6 +219,7 @@ public class LocationManagerService extends ILocationManager.Stub {
     private int mCurrentUserId = UserHandle.USER_OWNER;
     private int[] mCurrentUserProfiles = new int[] { UserHandle.USER_OWNER };
 
+    private HashMap<RuleKey, Rule> mPrivacyRules = new HashMap<RuleKey, Rule>();
     public LocationManagerService(Context context) {
         super();
         mContext = context;
@@ -227,6 +236,9 @@ public class LocationManagerService extends ILocationManager.Stub {
 
             // fetch package manager
             mPackageManager = mContext.getPackageManager();
+		
+	    // ipShield firewall manager
+	    mFirewallConfigManager = (FirewallConfigManager) mContext.getSystemService(Context.FIREWALLCONFIG_SERVICE);
 
             // fetch power manager
             mPowerManager = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
@@ -2082,15 +2094,31 @@ public class LocationManagerService extends ILocationManager.Stub {
         return true;
     }
 
+    SensorPerturb mSensorPerturb = new SensorPerturb();
+    private final int TYPE_GPS = mFirewallConfigManager.TYPE_GPS;
+
     private void handleLocationChangedLocked(Location location, boolean passive) {
+	boolean playback = false;
         if (D) Log.d(TAG, "incoming location: " + location);
+	
+	Log.d(TAG, "Handle Location Changed Locked:: p " + location.getProvider());
+
 
         long now = SystemClock.elapsedRealtime();
         String provider = (passive ? LocationManager.PASSIVE_PROVIDER : location.getProvider());
-
-        // Skip if the provider is unknown.
-        LocationProviderInterface p = mProvidersByName.get(provider);
-        if (p == null) return;
+	
+	LocationProviderInterface p;	
+	if (provider.equals("playback")) {
+		Log.d(TAG, "playback:: changing provider to GPS");
+		p = mProvidersByName.get("gps");
+		provider = "gps";
+		playback = true;
+	} else {
+	        // Skip if the provider is unknown.
+		Log.d(TAG, "provider : " + provider);
+        	p = mProvidersByName.get(provider);
+        	if (p == null) return;
+	}
 
         // Update last known locations
         Location noGPSLocation = location.getExtraLocation(Location.EXTRA_NO_GPS_LOCATION);
@@ -2151,6 +2179,26 @@ public class LocationManagerService extends ILocationManager.Stub {
             Receiver receiver = r.mReceiver;
             boolean receiverDead = false;
 
+	   Log.d(TAG, "ipShield - updating location record");
+	   RuleKey ruleKey = new RuleKey(TYPE_GPS, receiver.mUid, receiver.mPackageName);
+	   Rule rule = mPrivacyRules.get(ruleKey);
+
+	  if (playback) {
+                if (mSensorPerturb.isActionPlayback(rule)) {
+                    Log.d(TAG, "Sending Playback location to " + receiver.mPackageName);
+                } else {
+                    Log.d(TAG, "Not sending Playback location to " + receiver.mPackageName);
+                    continue;
+                }
+            } else {
+                if (mSensorPerturb.isActionPlayback(rule)) {
+                    Log.d(TAG, "Not sending gps location to " + receiver.mPackageName);
+                    continue;
+                } else {
+                    Log.d(TAG, "Sending gps location to " + receiver.mPackageName);
+                }
+            }
+
             int receiverUserId = UserHandle.getUserId(receiver.mUid);
             if (!isCurrentProfile(receiverUserId) && !isUidALocationProvider(receiver.mUid)) {
                 if (D) {
@@ -2180,6 +2228,10 @@ public class LocationManagerService extends ILocationManager.Stub {
             } else {
                 notifyLocation = lastLocation;  // use fine location
             }
+            // ------ ipShield ----
+	    Log.d(TAG, "We try to transform location here");
+            notifyLocation = mSensorPerturb.transformData(notifyLocation, rule);
+            /////////////////////////////
             if (notifyLocation != null) {
                 Location lastLoc = r.mLastFixBroadcast;
                 if ((lastLoc == null) || shouldBroadcastSafe(notifyLocation, lastLoc, r, now)) {
@@ -2189,10 +2241,10 @@ public class LocationManagerService extends ILocationManager.Stub {
                     } else {
                         lastLoc.set(notifyLocation);
                     }
-                    if (!receiver.callLocationChangedLocked(notifyLocation)) {
-                        Slog.w(TAG, "RemoteException calling onLocationChanged on " + receiver);
-                        receiverDead = true;
-                    }
+		    if (!receiver.callLocationChangedLocked(notifyLocation)) {
+        	         Slog.w(TAG, "RemoteException calling onLocationChanged on " + receiver);
+        	         receiverDead = true;
+         	    }
                     r.mRequest.decrementNumUpdates();
                 }
             }
@@ -2225,7 +2277,8 @@ public class LocationManagerService extends ILocationManager.Stub {
                 }
             }
         }
-
+	
+	Log.d(TAG, "end of sending data");
         // remove dead records and receivers outside the loop
         if (deadReceivers != null) {
             for (Receiver receiver : deadReceivers) {
@@ -2519,6 +2572,116 @@ public class LocationManagerService extends ILocationManager.Stub {
             Slog.d(TAG, log);
         }
     }
+
+//------------- ipShield
+private byte[] readFirewallConfig() {
+        final String fileName = "/data/firewall-config"; 
+        byte[] buf; 
+        try { 
+            File file = new File(fileName); 
+            BufferedInputStream inStream = new BufferedInputStream(new FileInputStream(file)); 
+            if (file.length() > Integer.MAX_VALUE) { 
+                Log.e(TAG, "Unable to read " + fileName + ". File too large"); 
+            } 
+            buf = new byte[(int) file.length()]; 
+            inStream.read(buf, 0, (int) file.length()); 
+            inStream.close(); 
+        } 
+        catch (Exception e) { 
+            Log.e(TAG, "Unable to read firewall-config file"); 
+            buf = new byte[0]; // return empty data 
+        } 
+        return buf; 
+    }
+  
+   private class RuleKey {
+        int mSensorType;
+        int mPkgUid;
+        String mPkgName;
+
+        RuleKey(int sensorType, int pkgID, String pkgName) {
+            mSensorType = sensorType;
+            mPkgUid = pkgID;
+            mPkgName = pkgName;
+        }
+
+        @Override
+        public int hashCode() { 
+            final int prime = 31; 
+            int result = 1; 
+            result = prime * result + ((mPkgName == null) ? 0 : mPkgName.hashCode()); 
+            result = prime * result + mPkgUid; 
+            result = prime * result + mSensorType; 
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) { 
+            if (this == obj) 
+                return true; 
+            if (obj == null) 
+                return false; 
+            if (getClass() != obj.getClass()) 
+                return false; 
+            RuleKey other = (RuleKey) obj; 
+            if (mPkgName == null) { 
+                if (other.mPkgName != null) 
+                    return false; 
+            } 
+            else if (!mPkgName.equals(other.mPkgName)) 
+                return false; 
+            if (mPkgUid != other.mPkgUid) 
+                return false; 
+            if (mSensorType != other.mSensorType) 
+                return false; 
+            return true; 
+        } 
+   } 
+
+    public void parseFirewallConfigToHashMap(FirewallConfig firewallConfig) {
+        for(Rule rule: firewallConfig.getRuleList()) {
+            RuleKey ruleKey = new RuleKey(rule.getSensorType(), rule.getPkgUid(), rule.getPkgName());
+            Rule temp = Rule.newBuilder(rule).build();
+            mPrivacyRules.put(ruleKey, temp);
+        }    
+    }
+
+    public void printFirewallConfigHashMap() {
+        Log.d(TAG, "============ Printing FirewallConfig =============");
+       for(RuleKey ruleKey : mPrivacyRules.keySet()) {
+           Rule rule = mPrivacyRules.get(ruleKey);
+           Log.d(TAG, "ruleName = " + rule.getRuleName() + "pkgName = " + rule.getPkgName() + "action = " + rule.getAction().getActionType().getNumber());
+       } 
+        Log.d(TAG, "============ Done Printing FirewallConfig =============");
+    }
+
+    public void reloadConfig() {
+        Log.d(TAG, "Inside ReloadConfig of LocationManagerService");
+        byte[] rawFirewallConfigBytes = readFirewallConfig();
+        // clear the entries of the hashmap
+        mPrivacyRules.clear();
+        try {
+            FirewallConfig firewallConfig = FirewallConfig.parseFrom(rawFirewallConfigBytes);
+            parseFirewallConfigToHashMap(firewallConfig);
+        }
+        catch (InvalidProtocolBufferException ex) {
+            Log.e(TAG, "Unable to parse the firewallConfig string");
+        }
+        printFirewallConfigHashMap();
+    }
+
+    public void setLocation(Location location)
+    {
+        Log.d(TAG, "SetLocation called:: LocationManagerService " + location.getAltitude());
+        //mSensorPerturb.addLocation(location);
+        location.makeComplete();
+        synchronized (mLock) {
+            handleLocationChangedLocked(location, false);
+        }
+//        reportLocation(location, false);
+    }
+
+////////////////////////////////////////////////////////////////////////////////////
 
     @Override
     protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
