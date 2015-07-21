@@ -5,10 +5,12 @@ import android.location.Location;
 import android.util.Log;
 import android.util.Slog;
 import java.util.ArrayList;
+import java.util.Random;
 
 public class SensorPerturb {
    private static final String TAG = "LocationSensorPerturb";
    private ArrayList<Location> pb_buffer = new ArrayList<Location>();
+   private Random mRandom = new Random();
 
    public void addLocation(Location l)
    {
@@ -26,8 +28,8 @@ public class SensorPerturb {
        VectorValue vectorValue = action.getParam().getConstantValue().getVecVal();
        notifyLocation.setLatitude(vectorValue.getLat());
        notifyLocation.setLongitude(vectorValue.getLon());
-       Log.d(TAG, "set constant lat" + vectorValue.getLat());
-       Log.d(TAG, "set constant lon" + vectorValue.getLon());
+       Log.d(TAG, "-set constant lat" + vectorValue.getLat());
+       Log.d(TAG, "-set constant lon" + vectorValue.getLon());
        if(vectorValue.hasAccuracy()) {
            notifyLocation.setAccuracy(vectorValue.getAccuracy());
        }
@@ -42,6 +44,17 @@ public class SensorPerturb {
 
    private Location perturbData(Location notifyLocation, Rule rule) {
        // Check date
+       Log.d(TAG, "Is it perturbing ?? ");
+       if (notifyLocation != null) {
+           Action action = rule.getAction();
+           double unifMin = -2;//action.getPerturb().getunifMin();
+           double unifMax = 2;//action.getPerturb().getunifMax();
+           Log.d(TAG, "perturbing with uniform [" + unifMin + ", " + unifMax + "] ");
+           double dLat = unifMin + mRandom.nextDouble() * (unifMax - unifMin);
+           double dLng = unifMin + mRandom.nextDouble() * (unifMax - unifMin);
+           notifyLocation.setLatitude(notifyLocation.getLatitude() + dLat);
+           notifyLocation.setLongitude(notifyLocation.getLongitude() + dLng);
+       }
        return notifyLocation;
    }
 

@@ -896,6 +896,7 @@ public final class SystemServer {
                 ServiceManager.addService("firewallconfigservice",
                     new FirewallConfigService(context));
             } catch (Throwable e) {
+                Slog.i(TAG, e.getMessage());
                 reportWtf("starting FirewallConfigService service", e);
             }
 

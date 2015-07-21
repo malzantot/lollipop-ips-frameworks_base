@@ -807,14 +807,25 @@ public abstract class SensorManager {
     protected abstract boolean registerListenerImpl(SensorEventListener listener, Sensor sensor,
             int delayUs, Handler handler, int maxBatchReportLatencyUs, int reservedFlags);
 
-    
+
+    //----- ipShield- ------    
     public void reloadConfig() {
         Log.d(TAG, "SensorManager::reloadConfig");
         reloadConfigImpl();
     }
 
+    public void sendEvents(SensorEvent event, Sensor sensor) {
+        Log.d(TAG, "SensorManager::sendEvents");
+        sendEventsImpl(event , sensor);
+    }
+
     /** @hide */
     protected abstract void reloadConfigImpl();
+
+    /** @hide */
+    protected abstract int sendEventsImpl(SensorEvent event, Sensor sensor);
+ 
+    //------------------------------------------------------------------------------
 
     /**
      * Flushes the batch FIFO of all the sensors registered for this listener. If there are events

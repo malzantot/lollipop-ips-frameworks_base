@@ -134,6 +134,7 @@ public class FirewallConfigService extends IFirewallConfigService.Stub {
         } 
         catch (RemoteException ex) {
         	Log.e(TAG, "Unable to invoke reloadConfig on LocationManagerService");
+            Log.e(TAG, ex.getMessage());
         }
     }
 }

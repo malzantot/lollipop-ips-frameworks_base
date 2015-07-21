@@ -64,6 +64,7 @@ message Action {
     }   
     required ActionType actionType = 1;
     optional Param param = 2;
+    optional Perturb perturb = 3;
 }
 
 message Rule {

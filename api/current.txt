@@ -12427,6 +12427,7 @@ package android.hardware {
     method public void reloadConfig();
     method public static boolean remapCoordinateSystem(float[], int, int, float[]);
     method public boolean requestTriggerSensor(android.hardware.TriggerEventListener, android.hardware.Sensor);
+    method public void sendEvents(android.hardware.SensorEvent, android.hardware.Sensor);
     method public deprecated void unregisterListener(android.hardware.SensorListener);
     method public deprecated void unregisterListener(android.hardware.SensorListener, int);
     method public void unregisterListener(android.hardware.SensorEventListener, android.hardware.Sensor);

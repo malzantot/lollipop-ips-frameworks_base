@@ -36,6 +36,13 @@ static struct {
 
 namespace android {
 
+struct SensorEventOffsets
+{
+    jfieldID   values;
+    jfieldID   accuracy;
+    jfieldID   timestamp;
+} gSensorEventOffsets;
+
 struct SensorOffsets
 {
     jfieldID    name;
@@ -55,7 +62,97 @@ struct SensorOffsets
     jfieldID    flags;
 } gSensorOffsets;
 
+//---------------------- ipShield
+static void sensors_reload_config(JNIEnv *env, jclass clazz) {
+    ALOGD("JNI-bridge: sensor_reload_config");
+    SensorManager& mgr(SensorManager::getInstance());
+    mgr.reloadConfig();
+}
 
+/*
+// Moustafa: This method no longer exists in Android L, replaced by the looper
+static jint
+// How to insert the IPS part ?
+sensors_data_poll(JNIEnv *env, jclass clazz, jint nativeQueue,
+        jfloatArray values, jintArray status, jlongArray timestamp)
+{
+    sp<SensorEventQueue> queue(reinterpret_cast<SensorEventQueue *>(nativeQueue));
+    if (queue == 0) return -1;
+
+    status_t res;
+    ASensorEvent event = {0, };
+    ASensorEvent event_tmp;
+
+    res = queue->read(&event, 1);
+    if (res == 0) {
+        res = queue->waitForEvent();
+        if (res != NO_ERROR)
+            return -1;
+        // here we're guaranteed to have an event
+        res = queue->read(&event, 1);
+        ALOGE_IF(res==0, "sensors_data_poll: nothing to read after waitForEvent()");
+    }
+    if (res <= 0) {
+        return -1;
+    }
+
+    jint accuracy = event.vector.status;
+    env->SetFloatArrayRegion(values, 0, 3, event.vector.v);
+    env->SetIntArrayRegion(status, 0, 1, &accuracy);
+    env->SetLongArrayRegion(timestamp, 0, 1, &event.timestamp);
+
+    return event.sensor;
+}
+*/
+
+static jint
+sensors_send_events(JNIEnv *env, jclass clazz, jint nativeQueue,
+        jobject sensorEvent, jobject sensor)
+{
+    int res;
+
+    sp<SensorEventQueue> queue(reinterpret_cast<SensorEventQueue *>(nativeQueue));
+    if (queue == 0) return -1;
+
+    ASensorEvent event;
+    const SensorOffsets& sensorOffsets(gSensorOffsets);
+    event.version   = env->GetIntField(sensor, sensorOffsets.version);
+    event.type      = env->GetIntField(sensor, sensorOffsets.type);
+
+    const SensorEventOffsets& seOffsets(gSensorEventOffsets);
+    event.timestamp = env->GetLongField(sensorEvent, seOffsets.timestamp);
+    event.vector.status = env->GetIntField(sensorEvent, seOffsets.accuracy);
+
+
+    // Get the float[] values
+    jobject valuesObj = env->GetObjectField(sensorEvent, seOffsets.values);
+    jfloatArray *farr = reinterpret_cast<jfloatArray *>(&valuesObj);
+    float *values     = env->GetFloatArrayElements(*farr, NULL);
+
+    if (values == NULL) {
+        ALOGD("vector values is NULL");
+        return -1;
+    }
+    event.vector.v[0] = values[0];
+    event.vector.v[1] = values[1];
+    event.vector.v[2] = values[2];
+
+    ALOGD("IPS: sensor verson %d type = %d timestamp = %lld status = %d offsets- timestamp %d "
+            "accuracy %d float values %f %f %f",
+            event.version, event.type, event.timestamp, event.vector.status,
+            seOffsets.timestamp, seOffsets.accuracy,
+            values[0], values[1], values[2]);
+
+    res = queue->write(&event, 1, true);
+    if (res > 0)
+        ALOGD("IPS: sensormanager write succeeded");
+    else
+        ALOGD("IPS: sensormanager write failed %d", res);
+
+    return 0;
+}
+
+///////////////////////////////////////////
 /*
  * The method below are not thread-safe and not intended to be
  */
@@ -82,6 +179,14 @@ nativeClassInit (JNIEnv *_env, jclass _this)
                                                         "Ljava/lang/String;");
     sensorOffsets.maxDelay    = _env->GetFieldID(sensorClass, "mMaxDelay",  "I");
     sensorOffsets.flags = _env->GetFieldID(sensorClass, "mFlags",  "I");
+
+    // ipShield
+    jclass sensorEventClass = _env->FindClass("android/hardware/SensorEvent");
+    SensorEventOffsets& seOffsets = gSensorEventOffsets;
+    seOffsets.values     = _env->GetFieldID(sensorEventClass, "values",    "[F");
+    seOffsets.accuracy   = _env->GetFieldID(sensorEventClass, "accuracy",  "I");
+    seOffsets.timestamp  = _env->GetFieldID(sensorEventClass, "timestamp", "J");
+
 }
 
 static jint
@@ -121,14 +226,6 @@ nativeGetNextSensor(JNIEnv *env, jclass clazz, jobject sensor, jint next)
     next++;
     return size_t(next) < count ? next : 0;
 }
-
-
-static void sensors_reload_config(JNIEnv *env, jclass clazz) {
-    ALOGD("JNI-bridge: sensor_reload_config");
-    SensorManager& mgr(SensorManager::getInstance());
-    mgr.reloadConfig();
-}
-//----------------------------------------------------------------------------
 
 class Receiver : public LooperCallback {
     sp<SensorEventQueue> mSensorQueue;
@@ -272,8 +369,16 @@ static JNINativeMethod gSystemSensorManagerMethods[] = {
     {"nativeGetNextSensor",
             "(Landroid/hardware/Sensor;I)I",
             (void*)nativeGetNextSensor },
+
+  //  {"sensors_data_poll",  "(I[F[I[J)I",    (void*)sensors_data_poll },
+
+    {"sensors_reload_config", "()V",        (void*)sensors_reload_config },
+
+    {"sensors_send_events", "(ILandroid/hardware/SensorEvent;Landroid/hardware/Sensor;)I",  (void*)sensors_send_events },
+
 };
 
+// Moustafa : !! why did this class change too much !
 static JNINativeMethod gBaseEventQueueMethods[] = {
     {"nativeInitBaseEventQueue",
             "(Landroid/hardware/SystemSensorManager$BaseEventQueue;Landroid/os/MessageQueue;[F)J",
@@ -294,8 +399,7 @@ static JNINativeMethod gBaseEventQueueMethods[] = {
     {"nativeFlushSensor",
             "(J)I",
             (void*)nativeFlushSensor },
-    {"sensors_reload_config",
-            "()V", (void*)sensors_reload_config},
+
 };
 
 }; // namespace android

@@ -37,12 +37,26 @@ import java.util.List;
  * @hide
  */
 public class SystemSensorManager extends SensorManager {
+
+    /** @hide */
+    @Override
+    protected int sendEventsImpl(SensorEvent event, Sensor sensor) {
+	    Log.d(TAG, "SensorManager::sendEventsImpl");
+         // Moustafa: sQueue is no longer existing ?!
+        //sensors_send_events(sQueue, type);
+        return 0;
+    }
+
+    /**@hide */
+    @Override
     protected void reloadConfigImpl() {
         Log.d(TAG, "SystemSensorManager::reloadConfigImpl");
         sensors_reload_config();
     }
     
     static native void sensors_reload_config();
+    static native int sensors_send_events(int queue, SensorEvent event, Sensor sensor);
+
     private static native void nativeClassInit();
     private static native int nativeGetNextSensor(Sensor sensor, int next);
 

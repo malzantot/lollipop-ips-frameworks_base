@@ -2099,7 +2099,7 @@ public class LocationManagerService extends ILocationManager.Stub {
 
     private void handleLocationChangedLocked(Location location, boolean passive) {
 	boolean playback = false;
-        if (D) Log.d(TAG, "incoming location: " + location);
+        if (D) Log.d(TAG, "incoming location : " + location);
 	
 	Log.d(TAG, "Handle Location Changed Locked:: p " + location.getProvider());
 
@@ -2230,7 +2230,10 @@ public class LocationManagerService extends ILocationManager.Stub {
             }
             // ------ ipShield ----
 	    Log.d(TAG, "We try to transform location here");
+            Log.d(TAG, "ipShield before = " + notifyLocation);
+            Log.d(TAG, "transformation Rule = " + rule);
             notifyLocation = mSensorPerturb.transformData(notifyLocation, rule);
+            Log.d(TAG, "ipShield after = " + notifyLocation);
             /////////////////////////////
             if (notifyLocation != null) {
                 Location lastLoc = r.mLastFixBroadcast;
