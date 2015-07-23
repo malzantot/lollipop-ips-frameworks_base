@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.Random;
 
 public class SensorPerturb {
+
+
    private static final String TAG = "LocationSensorPerturb";
    private ArrayList<Location> pb_buffer = new ArrayList<Location>();
    private Random mRandom = new Random();
@@ -44,26 +46,43 @@ public class SensorPerturb {
 
    private Location perturbData(Location notifyLocation, Rule rule) {
        // Check date
-       Log.d(TAG, "Is it perturbing ?? ");
        if (notifyLocation != null) {
            Action action = rule.getAction();
-           double unifMin = -2;//action.getPerturb().getunifMin();
-           double unifMax = 2;//action.getPerturb().getunifMax();
-           Log.d(TAG, "perturbing with uniform [" + unifMin + ", " + unifMax + "] ");
-           double dLat = unifMin + mRandom.nextDouble() * (unifMax - unifMin);
-           double dLng = unifMin + mRandom.nextDouble() * (unifMax - unifMin);
-           notifyLocation.setLatitude(notifyLocation.getLatitude() + dLat);
-           notifyLocation.setLongitude(notifyLocation.getLongitude() + dLng);
+           double degrees_per_km = 9e-3; // 1 km is approximately 0.009 degree
+           Perturb perturb = action.getParam().getPerturb();
+           if (perturb.getDistType() == Perturb.DistributionType.GAUSSIAN) {
+               double mean = perturb.getMean();
+               double variance = perturb.getVariance();
+               double dLat = (mRandom.nextGaussian() * Math.sqrt(variance) + mean) * degrees_per_km;
+               double dLng = (mRandom.nextGaussian() * Math.sqrt(variance) + mean) * degrees_per_km;
+               notifyLocation.setLatitude(notifyLocation.getLatitude() + dLat);
+               notifyLocation.setLongitude(notifyLocation.getLongitude() + dLng);
+
+           } else if (perturb.getDistType() == Perturb.DistributionType.UNIFORM) {
+               double unifMin = perturb.getUnifMin();
+               double unifMax = perturb.getUnifMax();
+               double dLat = (mRandom.nextDouble() * (unifMax-unifMin) + unifMin) * degrees_per_km;
+               double dLng = (mRandom.nextDouble() * (unifMax-unifMin) + unifMin) * degrees_per_km;
+               notifyLocation.setLatitude(notifyLocation.getLatitude() + dLat);
+               notifyLocation.setLongitude(notifyLocation.getLongitude() + dLng);
+
+           } else if (perturb.getDistType() == Perturb.DistributionType.EXPONENTIAL) {
+               double lambda = perturb.getExpParam();
+               double dLat = -1.0/ lambda * Math.log(1.0 - mRandom.nextDouble()) * degrees_per_km;
+               double dLng = -1.0/ lambda * Math.log(1.0 - mRandom.nextDouble()) * degrees_per_km;
+               notifyLocation.setLatitude(notifyLocation.getLatitude() + dLat);
+               notifyLocation.setLongitude(notifyLocation.getLongitude() + dLng);
+           }
        }
        return notifyLocation;
    }
 
    public boolean isActionPlayback(Rule rule) {
        if (rule == null) {
-           Log.d(TAG, "isActionPlayback: rule is null");
+           // Log.d(TAG, "isActionPlayback: rule is null");
            return false;
        } else
-           Log.d(TAG, "isActionPlayback: rule is not null");
+           // Log.d(TAG, "isActionPlayback: rule is not null");
        switch(rule.getAction().getActionType()) {
            case ACTION_PLAYBACK:
                return true;
